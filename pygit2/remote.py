@@ -195,28 +195,43 @@ class RemoteCallbacks(object):
             Rejection message from the remote. If None, the update was accepted.
         """
 
-    def _fill_fetch_options(self, fetch_opts):
-        fetch_opts.callbacks.sideband_progress = self._sideband_progress_cb
-        fetch_opts.callbacks.transfer_progress = self._transfer_progress_cb
-        fetch_opts.callbacks.update_tips = self._update_tips_cb
-        fetch_opts.callbacks.credentials = self._credentials_cb
-        fetch_opts.callbacks.certificate_check = self._certificate_cb
+    def push_transfer_progress(self, current, total, bytes):
+        """
+        Called during the push.
+        """
+
+    def pack_progress(self, stage, current, total):
+        """
+        Called during the push.
+        """
+
+    def _fill_callbacks(self, callbacks):
+        callbacks.sideband_progress = self._sideband_progress_cb
+        callbacks.transfer_progress = self._transfer_progress_cb
+        callbacks.update_tips = self._update_tips_cb
+        callbacks.credentials = self._credentials_cb
+        callbacks.certificate_check = self._certificate_cb
+
+        if hasattr(callbacks, 'push_update_reference'):
+            callbacks.push_update_reference = self._push_update_reference_cb
+
+        if hasattr(callbacks, 'push_transfer_progress'):
+            callbacks.push_transfer_progress = self._push_transfer_progress_cb
+
+        if hasattr(callbacks, 'pack_progress'):
+            callbacks.pack_progress = self._pack_progress_cb
+
         # We need to make sure that this handle stays alive
         self._self_handle = ffi.new_handle(self)
-        fetch_opts.callbacks.payload = self._self_handle
+        callbacks.payload = self._self_handle
 
         self._stored_exception = None
 
+    def _fill_fetch_options(self, fetch_opts):
+        self._fill_callbacks(fetch_opts.callbacks)
+
     def _fill_push_options(self, push_opts):
-        push_opts.callbacks.sideband_progress = self._sideband_progress_cb
-        push_opts.callbacks.transfer_progress = self._transfer_progress_cb
-        push_opts.callbacks.update_tips = self._update_tips_cb
-        push_opts.callbacks.credentials = self._credentials_cb
-        push_opts.callbacks.certificate_check = self._certificate_cb
-        push_opts.callbacks.push_update_reference = self._push_update_reference_cb
-        # We need to make sure that this handle stays alive
-        self._self_handle = ffi.new_handle(self)
-        push_opts.callbacks.payload = self._self_handle
+        self._fill_callbacks(push_opts.callbacks)
 
     def _fill_prune_callbacks(self, prune_callbacks):
         prune_callbacks.update_tips = self._update_tips_cb
@@ -237,6 +252,38 @@ class RemoteCallbacks(object):
 
         try:
             transfer_progress(TransferProgress(stats_ptr))
+        except Exception as e:
+            self._stored_exception = e
+            return C.GIT_EUSER
+
+        return 0
+
+    @ffi.callback('git_push_transfer_progress')
+    def _push_transfer_progress_cb(current, total, bytes, data):
+        self = ffi.from_handle(data)
+
+        transfer_progress = getattr(self, 'push_transfer_progress', None)
+        if not transfer_progress:
+            return 0
+
+        try:
+            transfer_progress(current, total, bytes)
+        except Exception as e:
+            self._stored_exception = e
+            return C.GIT_EUSER
+
+        return 0
+
+    @ffi.callback('git_packbuilder_progress')
+    def _pack_progress_cb(stage, current, total, data):
+        self = ffi.from_handle(data)
+
+        pack_progress = getattr(self, 'pack_progress', None)
+        if not pack_progress:
+            return 0
+
+        try:
+            pack_progress(stage, current, total)
         except Exception as e:
             self._stored_exception = e
             return C.GIT_EUSER
