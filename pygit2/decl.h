@@ -271,6 +271,9 @@ int git_remote_create(
 	git_repository *repo,
 	const char *name,
 	const char *url);
+int git_remote_create_anonymous(git_remote **out,
+                                git_repository *repo,
+                                const char *url);
 int git_remote_create_with_fetchspec(git_remote **out, git_repository *repo, const char *name, const char *url, const char *fetch);
 int git_remote_delete(git_repository *repo, const char *name);
 int git_repository_state_cleanup(git_repository *repo);

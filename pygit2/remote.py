@@ -589,6 +589,21 @@ class RemoteCollection(object):
 
         return Remote(self._repo, cremote[0])
 
+    def create_anonymous(self, url):
+        """Create a remote with the given url in-memory. You can use this when
+        you have a URL instead of a remote's name. Returns a <Remote>
+        object.
+
+        """
+
+        cremote = ffi.new('git_remote **')
+
+        err = C.git_remote_create_anonymous(cremote, self._repo._repo, to_bytes(url))
+
+        check_error(err)
+
+        return Remote(self._repo, cremote[0])
+
     def create(self, name, url, fetch=None):
         """Create a new remote with the given name and url. Returns a <Remote>
         object.
