@@ -41,6 +41,9 @@ class Username(object):
     """
 
     def __init__(self, username):
+        # avoid a segfault :(
+        if username is None:
+            raise ValueError('username is required')
         self._username = username
 
     @property
