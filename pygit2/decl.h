@@ -86,6 +86,15 @@ typedef struct git_signature {
 	git_time when;
 } git_signature;
 
+typedef struct git_remote_head {
+        int local; /* available locally */
+        git_oid oid;
+        git_oid loid;
+        char *name;
+        char *symref_target;
+} git_remote_head;
+typedef int (*git_headlist_cb)(git_remote_head *rhead, void *payload);
+
 #define GIT_FEATURE_THREADS ...
 #define GIT_FEATURE_HTTPS ...
 #define GIT_FEATURE_SSH ...
@@ -297,6 +306,10 @@ const git_refspec * git_remote_get_refspec(git_remote *remote, size_t n);
 
 int git_remote_get_fetch_refspecs(git_strarray *array, git_remote *remote);
 int git_remote_get_push_refspecs(git_strarray *array, git_remote *remote);
+
+int git_remote_connect(git_remote *remote, git_direction direction, const git_remote_callbacks *callbacks, const git_proxy_options *proxy_opts, const git_strarray *custom_headers);
+int git_remote_connected(const git_remote *remote);
+int git_remote_ls(const git_remote_head ***out,  size_t *size, git_remote *remote);
 
 void git_remote_free(git_remote *remote);
 

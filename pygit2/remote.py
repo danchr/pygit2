@@ -28,6 +28,8 @@
 # Import from the future
 from __future__ import absolute_import
 
+import collections
+
 # Import from pygit2
 from _pygit2 import Oid
 from .errors import check_error, Passthrough
@@ -68,6 +70,12 @@ class TransferProgress(object):
 
         self.received_bytes = tp.received_bytes
         """"Number of bytes received up to now"""
+
+
+RemoteHead = collections.namedtuple(
+    'RemoteHead',
+    ('local', 'oid', 'local_oid', 'name', 'target'),
+)
 
 
 class RemoteCallbacks(object):
@@ -487,6 +495,56 @@ class Remote(object):
                 check_error(err)
         finally:
             callbacks._self_handle = None
+
+    def list(self, callbacks=None):
+        """Check whether the remote is connected"""
+        if not C.git_remote_connected(self._remote):
+            defaultcallbacks = ffi.new('git_remote_callbacks *')
+
+            err = C.git_remote_init_callbacks(defaultcallbacks, 1)
+
+            if err and callbacks._stored_exception:
+                raise callbacks._stored_exception
+            check_error(err)
+
+            if callbacks is None:
+                callbacks = RemoteCallbacks()
+
+            callbacks._fill_callbacks(defaultcallbacks)
+
+            err = C.git_remote_connect(self._remote, C.GIT_DIRECTION_FETCH,
+                                       defaultcallbacks, ffi.NULL, ffi.NULL)
+
+            if err and callbacks._stored_exception:
+                raise callbacks._stored_exception
+            check_error(err)
+
+        cremotes = ffi.new('git_remote_head ***')
+        ccount = ffi.new('size_t *')
+
+        err = C.git_remote_ls(cremotes, ccount, self._remote)
+
+        if err and callbacks._stored_exception:
+            raise callbacks._stored_exception
+        check_error(err)
+
+        if callbacks._stored_exception:
+            raise callbacks._stored_exception
+
+        if not cremotes[0]:
+            return []
+
+        return [
+            RemoteHead(
+                local=bool(rh.local),
+                oid=Oid(raw=bytes(ffi.buffer(rh.oid.id)[:])),
+                local_oid=Oid(raw=bytes(ffi.buffer(rh.loid.id)[:])),
+                name=maybe_string(rh.name),
+                target=maybe_string(rh.symref_target),
+            )
+            for rh in ffi.unpack(cremotes[0], ccount[0])
+        ]
+
 
 def get_credentials(fn, url, username, allowed):
     """Call fn and return the credentials object"""
